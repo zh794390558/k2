@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "k2/csrc/paddle_util.h"
+#include "paddle/phi/api/include/tensor_utils.h"
 
 namespace k2 {
 
@@ -117,11 +118,11 @@ Array1<Arc> FromPaddle<Arc>(paddle::Tensor tensor) {
 
   phi::IntArray strides = phi::stride(tensor.dims());
 
-  K2_CHECK_EQ(strides()[0], 4) << "Expected stride: 4. "
-                                      << "Given: " << strides()[0];
+  K2_CHECK_EQ(strides[0], 4) << "Expected stride: 4. "
+                                      << "Given: " << strides[0];
 
-  K2_CHECK_EQ(strides()[1], 1) << "Expected stride: 1. "
-                                      << "Given: " << strides()[1];
+  K2_CHECK_EQ(strides[1], 1) << "Expected stride: 1. "
+                                      << "Given: " << strides[1];
 
   K2_CHECK_EQ(tensor.numel() % 4, 0);
 

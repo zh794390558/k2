@@ -22,7 +22,7 @@
 #include <memory>
 
 #include "k2/csrc/context.h"
-#include "paddle/all.h"
+#include "paddle/phi/api/all.h"
 
 namespace k2 {
 

@@ -28,6 +28,8 @@
 #include "k2/csrc/fsa.h"
 #include "k2/csrc/log.h"
 #include "k2/csrc/paddle_context.h"
+#include "paddle/phi/api/include/tensor_utils.h"
+#include "paddle/phi/core/ddim.h"
 
 namespace k2 {
 
@@ -85,7 +87,7 @@ template <typename T>
 paddle::Tensor ToPaddle(Array1<T> &array) {
   auto device_type = ToPaddleDeviceType(array.Context()->GetDeviceType());
   int32_t device_id = array.Context()->GetDeviceId();
-  auto device = torch::Place(device_type, device_id);
+  auto device = phi::Place(device_type, device_id);
   auto scalar_type = ToScalarType<T>::value;
   // We will call torch::from_blob below. However, if we
   // call it with an empty Array1, we'll get error:

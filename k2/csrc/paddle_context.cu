@@ -19,6 +19,7 @@
 #include <memory>
 #include <mutex>  // NOLINT
 
+#include "paddle/phi/core/allocator.h"
 #ifdef K2_WITH_CUDA
 // #include "c10/cuda/CUDACachingAllocator.h"
 // #include "c10/cuda/CUDAFunctions.h"
@@ -32,8 +33,6 @@
 #include "k2/csrc/log.h"
 #include "k2/csrc/paddle_context.h"
 
-namespace phi = paddle::phi;
-
 namespace k2 {
 
 bool forceUncachedAllocator() {
@@ -46,7 +45,7 @@ static bool has_cuda = false;
 static void InitHasCuda() {
 #ifdef K2_WITH_CUDA
   // if (torch::cuda::is_available())
-  if(phi::backend::gpu::GetGPUDeviceCount() > 0)
+  if(phi::backends::gpu::GetGPUDeviceCount() > 0)
     has_cuda = true;
   else
     K2_LOG(WARNING) << "CUDA is not available. Return a CPU context.";
@@ -72,11 +71,13 @@ class PaddleCpuContext : public Context {
     // void *p = allocator_->raw_allocate(bytes);
     phi::Allocator::AllocationPtr a = allocator_->Allocate(bytes);
     if (deleter_ == nullptr){
-      deleter_ = a->get_deleter();
+      deleter_ = a->deleter();
     } else {
-      K2_CHECK_EQ(deleter_, a->get_deleter());
+      auto tmp = a->deleter();
+      K2_CHECK_EQ(deleter_, tmp);
     }
-    void *p = a->release().
+    K2_CHECK(deleter_ != nullptr);
+    void *p = a.release();
 
     if (deleter_context != nullptr) *deleter_context = nullptr;
     return p;
@@ -124,7 +125,7 @@ class PaddleCpuContext : public Context {
   // torch::Allocator *allocator_;  // NOT owned here
   phi::Allocator *allocator_; // NOT owned here
 
-  phi::Allocator::DeleterType deleter_{nullptr};
+  phi::Allocation::DeleterFnPtr deleter_{nullptr};
 };
 
 class PaddleCudaContext : public Context {
@@ -132,10 +133,10 @@ class PaddleCudaContext : public Context {
   explicit PaddleCudaContext(int32_t gpu_id) : gpu_id_(gpu_id) {
 #ifdef K2_WITH_CUDA
     K2_CHECK_GE(gpu_id, 0);
-    K2_CHECK_LT(gpu_id, phi::backend::gpu::GetGPUDeviceCount());
+    K2_CHECK_LT(gpu_id, phi::backends::gpu::GetGPUDeviceCount());
 
     // c10::cuda::set_device(gpu_id);
-    phi::backend::gpu::SetDeviceId(gpu_id);
+    phi::backends::gpu::SetDeviceId(gpu_id);
 
     // The internals of `lazyInitCUDA` are executed only once
     // so it is fine to invoke lazyInitCUDA() multiple times.
@@ -183,11 +184,11 @@ class PaddleCudaContext : public Context {
     // void *p = allocator_->raw_allocate(bytes);
     phi::Allocator::AllocationPtr a = allocator_->Allocate(bytes);
     if (deleter_ == nullptr){
-      deleter_ = a->get_deleter();
+      deleter_ = a->deleter();
     } else {
-      K2_CHECK_EQ(deleter_, a->get_deleter());
+      K2_CHECK_EQ(deleter_, a->deleter());
     }
-    void *p = a->release().
+    void *p = a.release();
 
     if (deleter_context != nullptr) *deleter_context = nullptr;
     return p;
@@ -217,9 +218,7 @@ class PaddleCudaContext : public Context {
 
   void Sync() const override {
     DeviceGuard guard(gpu_id_);
-    // auto ret = cudaStreamSynchronize(GetCudaStream());
-    auto stream = GetCudaStream();
-    auto ret = GpuStreamSync(reinterpret_cast<phi::CUDAStream*>(stream));
+    auto ret = cudaStreamSynchronize(GetCudaStream());
     K2_CHECK_CUDA_ERROR(ret);
   }
 
@@ -228,18 +227,16 @@ class PaddleCudaContext : public Context {
     DeviceType device_type = dst_context->GetDeviceType();
     switch (device_type) {
       case kCpu: {
-        // cudaError_t ret =
-        //     cudaMemcpy(dst, src, num_bytes, cudaMemcpyDeviceToHost);
-        // K2_CHECK_CUDA_ERROR(ret);
-        phi::backend::gpu::GpuMemcpySync(dst, src, num_bytes, gpuMemcpyDeviceToHost);
+        cudaError_t ret =
+            cudaMemcpy(dst, src, num_bytes, cudaMemcpyDeviceToHost);
+        K2_CHECK_CUDA_ERROR(ret);
         break;
       }
       case kCuda: {
-        // cudaError_t ret =
-        //     cudaMemcpyAsync(dst, src, num_bytes, cudaMemcpyDeviceToDevice,
-        //                     dst_context->GetCudaStream());
-        // K2_CHECK_CUDA_ERROR(ret);
-        phi::backend::gpu::GpuMemcpySync(dst, src, num_bytes, gpuMemcpyDeviceToDevice);
+        cudaError_t ret =
+            cudaMemcpyAsync(dst, src, num_bytes, cudaMemcpyDeviceToDevice,
+                            dst_context->GetCudaStream());
+        K2_CHECK_CUDA_ERROR(ret);
         break;
       }
       default:
@@ -251,6 +248,7 @@ class PaddleCudaContext : public Context {
  private:
   // torch::Allocator *allocator_;  // NOT owned here
   phi::Allocator *allocator_; // NOT owned here
+  phi::Allocation::DeleterFnPtr deleter_{nullptr};
   int32_t gpu_id_;
 };
 
@@ -262,7 +260,7 @@ ContextPtr GetCudaContext(int32_t gpu_id /*= -1*/) {
   if (has_cuda) {
 #ifdef K2_WITH_CUDA
     // if (gpu_id < 0) gpu_id = c10::cuda::current_device();
-    if(gpu_id < 0) gpu_id = phi::backend::gpu::GetCurrentDeviceId();
+    if(gpu_id < 0) gpu_id = phi::backends::gpu::GetCurrentDeviceId();
     DeviceGuard guard(gpu_id);
     return std::make_shared<PaddleCudaContext>(gpu_id);
 #else
@@ -278,10 +276,10 @@ RegionPtr NewRegion(paddle::Tensor tensor) {
   auto ans = std::make_shared<Region>();
   if (tensor.place().GetType() == phi::AllocationType::CPU) {
     ans->context = GetCpuContext();
-  } else if (tensor.is_cuda()) {
+  } else if (tensor.place().GetType() == phi::AllocationType::GPU) {
     ans->context = GetCudaContext(tensor.place().GetDeviceId());
   } else {
-    K2_LOG(FATAL) << "Unsupported device: " << tensor.device()
+    K2_LOG(FATAL) << "Unsupported device: " << tensor.place()
                   << "\nOnly CPU and CUDA are supported";
   }
 
