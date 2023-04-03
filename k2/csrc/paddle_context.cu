@@ -19,11 +19,13 @@
 #include <memory>
 #include <mutex>  // NOLINT
 
-// #ifdef K2_WITH_CUDA
+#ifdef K2_WITH_CUDA
 // #include "c10/cuda/CUDACachingAllocator.h"
 // #include "c10/cuda/CUDAFunctions.h"
 // #include "torch/cuda.h"
-// #endif
+
+#include "paddle/phi/backends/gpu/gpu_info.h"
+#endif
 
 #include "k2/csrc/context.h"
 #include "k2/csrc/device_guard.h"
@@ -35,8 +37,7 @@ namespace phi = paddle::phi;
 namespace k2 {
 
 bool forceUncachedAllocator() {
-  static bool force_uncached =
-      getenv("PYTORCH_NO_CUDA_MEMORY_CACHING") != nullptr;
+  static bool force_uncached = false;
   return force_uncached;
 }
 
@@ -44,7 +45,8 @@ static std::once_flag has_cuda_init_flag;
 static bool has_cuda = false;
 static void InitHasCuda() {
 #ifdef K2_WITH_CUDA
-  if (torch::cuda::is_available())
+  // if (torch::cuda::is_available())
+  if(phi::backend::gpu::GetGPUDeviceCount() > 0)
     has_cuda = true;
   else
     K2_LOG(WARNING) << "CUDA is not available. Return a CPU context.";
@@ -58,7 +60,7 @@ class PaddleCpuContext : public Context {
   PaddleCpuContext() {
     // allocator_ = torch::GetAllocator(torch::kCPU);
     allocator_ = paddle::GetAllocator(phi::Place(phi::AllocationType::CPU));
-    K2_CHECK(allocator_->raw_deleter() != nullptr);
+    // K2_CHECK(allocator_->raw_deleter() != nullptr);
   }
 
   DeviceType GetDeviceType() const override { return kCpu; }
@@ -75,6 +77,7 @@ class PaddleCpuContext : public Context {
       K2_CHECK_EQ(deleter_, a->get_deleter());
     }
     void *p = a->release().
+
     if (deleter_context != nullptr) *deleter_context = nullptr;
     return p;
   }
@@ -85,7 +88,9 @@ class PaddleCpuContext : public Context {
       // the memory is passed from a `torch::Tensor`
       delete reinterpret_cast<ManagedTensor *>(deleter_context);
     } else {
-      allocator_->raw_deallocate(data);
+      // allocator_->raw_deallocate(data);
+      auto allocation = new phi::Allocation(data, 0/*size_t size*/, deleter_, phi::CPUPlace());
+      allocation->~Allocation();
     }
   }
 
@@ -127,9 +132,10 @@ class PaddleCudaContext : public Context {
   explicit PaddleCudaContext(int32_t gpu_id) : gpu_id_(gpu_id) {
 #ifdef K2_WITH_CUDA
     K2_CHECK_GE(gpu_id, 0);
-    K2_CHECK_LT(gpu_id, c10::cuda::device_count());
+    K2_CHECK_LT(gpu_id, phi::backend::gpu::GetGPUDeviceCount());
 
-    c10::cuda::set_device(gpu_id);
+    // c10::cuda::set_device(gpu_id);
+    phi::backend::gpu::SetDeviceId(gpu_id);
 
     // The internals of `lazyInitCUDA` are executed only once
     // so it is fine to invoke lazyInitCUDA() multiple times.
@@ -140,7 +146,7 @@ class PaddleCudaContext : public Context {
     // allocator_ = c10::cuda::CUDACachingAllocator::get();
     allocator_ = phi::GetAllocator(phi::Place(phi::AllocationType::GPU, gpu_id));
 
-    K2_CHECK(allocator_->raw_deleter() != nullptr);
+    // K2_CHECK(allocator_->raw_deleter() != nullptr);
 #else
     K2_LOG(FATAL) << "Unreachable code.";
 #endif
@@ -152,8 +158,12 @@ class PaddleCudaContext : public Context {
 
   cudaStream_t GetCudaStream() const override {
 #ifdef K2_WITH_CUDA
-    return g_stream_override.OverrideStream(
-        c10::cuda::getCurrentCUDAStream(gpu_id_));
+    // return g_stream_override.OverrideStream(
+        // c10::cuda::getCurrentCUDAStream(gpu_id_));
+    
+    phi::CUDAStream* stream= paddle::GetCurrentCUDAStream(phi::GPUPlace(gpu_id_);
+    return g_stream_override.OverrideStream(reinterpret_cast<cudaStream_t>(stream))
+    );
 #else
     return cudaStream_t{};
 #endif
@@ -170,7 +180,15 @@ class PaddleCudaContext : public Context {
     //
     // CAUTION: Update this if PyTorch changes its implementation.
     DeviceGuard guard(gpu_id_);
-    void *p = allocator_->raw_allocate(bytes);
+    // void *p = allocator_->raw_allocate(bytes);
+    phi::Allocator::AllocationPtr a = allocator_->Allocate(bytes);
+    if (deleter_ == nullptr){
+      deleter_ = a->get_deleter();
+    } else {
+      K2_CHECK_EQ(deleter_, a->get_deleter());
+    }
+    void *p = a->release().
+
     if (deleter_context != nullptr) *deleter_context = nullptr;
     return p;
   }
@@ -186,7 +204,9 @@ class PaddleCudaContext : public Context {
       if (forceUncachedAllocator()) {
         K2_CHECK_CUDA_ERROR(cudaFree(data));
       } else {
-        allocator_->raw_deallocate(data);
+        // allocator_->raw_deallocate(data);
+        auto allocation = new phi::Allocation(data, 0/*size_t size*/, deleter_, phi::GPUPlace(gpu_id_));
+        allocation->~Allocation();
       }
     }
   }
@@ -197,7 +217,9 @@ class PaddleCudaContext : public Context {
 
   void Sync() const override {
     DeviceGuard guard(gpu_id_);
-    auto ret = cudaStreamSynchronize(GetCudaStream());
+    // auto ret = cudaStreamSynchronize(GetCudaStream());
+    auto stream = GetCudaStream();
+    auto ret = GpuStreamSync(reinterpret_cast<phi::CUDAStream*>(stream));
     K2_CHECK_CUDA_ERROR(ret);
   }
 
@@ -206,16 +228,18 @@ class PaddleCudaContext : public Context {
     DeviceType device_type = dst_context->GetDeviceType();
     switch (device_type) {
       case kCpu: {
-        cudaError_t ret =
-            cudaMemcpy(dst, src, num_bytes, cudaMemcpyDeviceToHost);
-        K2_CHECK_CUDA_ERROR(ret);
+        // cudaError_t ret =
+        //     cudaMemcpy(dst, src, num_bytes, cudaMemcpyDeviceToHost);
+        // K2_CHECK_CUDA_ERROR(ret);
+        phi::backend::gpu::GpuMemcpySync(dst, src, num_bytes, gpuMemcpyDeviceToHost);
         break;
       }
       case kCuda: {
-        cudaError_t ret =
-            cudaMemcpyAsync(dst, src, num_bytes, cudaMemcpyDeviceToDevice,
-                            dst_context->GetCudaStream());
-        K2_CHECK_CUDA_ERROR(ret);
+        // cudaError_t ret =
+        //     cudaMemcpyAsync(dst, src, num_bytes, cudaMemcpyDeviceToDevice,
+        //                     dst_context->GetCudaStream());
+        // K2_CHECK_CUDA_ERROR(ret);
+        phi::backend::gpu::GpuMemcpySync(dst, src, num_bytes, gpuMemcpyDeviceToDevice);
         break;
       }
       default:
@@ -225,7 +249,8 @@ class PaddleCudaContext : public Context {
   }
 
  private:
-  torch::Allocator *allocator_;  // NOT owned here
+  // torch::Allocator *allocator_;  // NOT owned here
+  phi::Allocator *allocator_; // NOT owned here
   int32_t gpu_id_;
 };
 
@@ -236,7 +261,8 @@ ContextPtr GetCudaContext(int32_t gpu_id /*= -1*/) {
 
   if (has_cuda) {
 #ifdef K2_WITH_CUDA
-    if (gpu_id < 0) gpu_id = c10::cuda::current_device();
+    // if (gpu_id < 0) gpu_id = c10::cuda::current_device();
+    if(gpu_id < 0) gpu_id = phi::backend::gpu::GetCurrentDeviceId();
     DeviceGuard guard(gpu_id);
     return std::make_shared<PaddleCudaContext>(gpu_id);
 #else
@@ -248,12 +274,12 @@ ContextPtr GetCudaContext(int32_t gpu_id /*= -1*/) {
   return GetCpuContext();
 }
 
-RegionPtr NewRegion(torch::Tensor tensor) {
+RegionPtr NewRegion(paddle::Tensor tensor) {
   auto ans = std::make_shared<Region>();
-  if (tensor.device().type() == torch::kCPU) {
+  if (tensor.place().GetType() == phi::AllocationType::CPU) {
     ans->context = GetCpuContext();
   } else if (tensor.is_cuda()) {
-    ans->context = GetCudaContext(tensor.device().index());
+    ans->context = GetCudaContext(tensor.place().GetDeviceId());
   } else {
     K2_LOG(FATAL) << "Unsupported device: " << tensor.device()
                   << "\nOnly CPU and CUDA are supported";
@@ -264,17 +290,9 @@ RegionPtr NewRegion(torch::Tensor tensor) {
   //
   // It will be freed in `Context::Deallocate`.
   auto *managed_tensor = new ManagedTensor(tensor);
-  ans->data = tensor.data_ptr();
+  ans->data = tensor.data();
   ans->deleter_context = managed_tensor;
-#if K2_TORCH_VERSION_MAJOR > 1 || \
-    (K2_TORCH_VERSION_MAJOR == 1 && K2_TORCH_VERSION_MINOR > 5)
-  // nbytes() is available only for torch > 1.5
-  // see https://github.com/pytorch/pytorch/pull/37028
-  ans->num_bytes = tensor.storage().nbytes();
-#else
-  // capacity() is available only for torch <= 1.5.0
-  ans->num_bytes = tensor.storage().capacity();
-#endif
+  ans->num_bytes = tensor.numel() * phi::SizeOf(tensor.dtype());
   ans->bytes_used = ans->num_bytes;
   return ans;
 }

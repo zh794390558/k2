@@ -322,6 +322,11 @@ if(K2_USE_PYTORCH)
   message(STATUS "Generated ${PROJECT_BINARY_DIR}/torch_version.py")
 endif()
 
+if(K2_USE_PADDLE)
+  add_definitions(-DK2_USE_PADDLE)
+  include(paddle)
+endif()
+
 if(K2_WITH_CUDA)
   add_definitions(-DK2_WITH_CUDA)
 endif()

@@ -148,6 +148,19 @@ if(K2_USE_PYTORCH)
   endif()
 endif()
 
+if(K2_USE_PADDLE)
+  if(NOT WIN32)
+    target_link_libraries(context PUBLIC ${PADDLE_LIB_DIRS})
+  else()
+    message(FATAL_ERROR "not support now")
+  endif()
+
+  if(DEFINED ENV{CONDA_PREFIX} AND APPLE)
+    # target_link_libraries(context PUBLIC "-L $ENV{CONDA_PREFIX}/lib")
+    message(FATAL_ERROR "not support now")
+  endif()
+endif()
+
 target_include_directories(context PUBLIC ${PYTHON_INCLUDE_DIRS})
 
 if(K2_ENABLE_TESTS OR K2_ENABLE_BENCHMARK)

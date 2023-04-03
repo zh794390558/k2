@@ -15,3 +15,7 @@ if(K2_USE_PYTORCH)
     is enabled - skipping compiling k2/torch. Current torch version: ${TORCH_VERSION}")
   endif()
 endif()
+
+if(K2_USE_PADDLE)
+
+endif()
