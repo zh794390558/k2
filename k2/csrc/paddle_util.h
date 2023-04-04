@@ -126,9 +126,9 @@ Array1<T> FromPaddle(paddle::Tensor tensor) {
   // Some empty tensor may have stride not equal to 1, e.g., tensor returned by
   // clone() method, it is valid here, so we won't check its strieds.
   if (tensor.numel()) {
-    phi::IntArray strides = phi::stride(tensor.dims());
-    K2_CHECK_EQ(strides()[0], 1)
-        << "Expected stride: 1. Given: " << strides()[0];
+    phi::IntArray strides = phi::vectorize(phi::stride(tensor.dims()));
+    K2_CHECK_EQ(strides[0], 1)
+        << "Expected stride: 1. Given: " << strides[0];
   }
 
   auto region = NewRegion(tensor);
@@ -176,9 +176,9 @@ Array2<T> FromPaddle(paddle::Tensor tensor, Array2Tag) {
       << "Expected scalar type: " << ToScalarType<T>::value
       << ". Given: " << tensor.dtype();
 
-  phi::IntArray strides = phi::stride(tensor.dims());
-  K2_CHECK_EQ(strides()[1], 1)
-      << "Expected stride: 1. Given: " << strides()[1];
+  phi::IntArray strides = phi::vectorize(phi::stride(tensor.dims()));
+  K2_CHECK_EQ(strides[1], 1)
+      << "Expected stride: 1. Given: " << strides[1];
 
   auto region = NewRegion(tensor);
   Array2<T> ans(tensor.dims()[0],     // dim0

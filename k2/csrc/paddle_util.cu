@@ -45,7 +45,7 @@ DeviceType FromTorchDeviceType(const phi::AllocationType &type) {
     case  phi::AllocationType::CPU:
       return kCpu;
     default:
-      K2_LOG(FATAL) << "Unsupported device type: " << type
+      K2_LOG(FATAL) << "Unsupported device type: " << phi::AllocationTypeStr(type)
                     << ". Only phi::AllocationType::GPU and phi::AllocationType::CPU are supported";
       return kUnk;  // unreachable code
   }
@@ -106,7 +106,7 @@ paddle::Tensor ToPaddle(Array1<Arc> &array) {
 
   return paddle::from_blob(
     array.Data(), sizes, scalar_type, phi::DataLayout::NCHW, device,
-    [saved_region = array.GetRegin()](void*){});
+    [saved_region = array.GetRegion()](void*){});
 }
 
 template <>
@@ -116,7 +116,7 @@ Array1<Arc> FromPaddle<Arc>(paddle::Tensor tensor) {
       << "Expected scalar type: " << ToScalarType<int32_t>::value
       << ". Given: " << tensor.dtype();
 
-  phi::IntArray strides = phi::stride(tensor.dims());
+  phi::IntArray strides = phi::vectorize(phi::stride(tensor.dims()));
 
   K2_CHECK_EQ(strides[0], 4) << "Expected stride: 4. "
                                       << "Given: " << strides[0];
@@ -136,8 +136,8 @@ Tensor FromPaddle(paddle::Tensor tensor, TensorTag) {
   // torch::IntArrayRef sizes = tensor.sizes();
   // torch::IntArrayRef strides = tensor.strides();
   phi::IntArray sizes = phi::vectorize(tensor.dims());
-  phi::IntArray strides = phi::stride(tensor.dims());
-  Shape shape({sizes.begin(), sizes.end()}, {strides.begin(), strides.end()});
+  phi::IntArray strides = phi::vectorize(phi::stride(tensor.dims()));
+  Shape shape({sizes.GetData().begin(), sizes.GetData().end()}, {strides.GetData().begin(), strides.GetData().end()});
 
   auto region = NewRegion(tensor);
   return Tensor(dtype, shape, region, 0);
@@ -165,13 +165,13 @@ paddle::Tensor ToPaddle(Tensor &tensor) {
 
   return paddle::from_blob(
      tensor.Data(), sizes, scalar_type, 
-     phi::DataLayout::NCHW, device, [saved_region = array.GetRegin()](void*){});
+     phi::DataLayout::NCHW, device, [saved_region = tensor.GetRegion()](void*){});
 }
 
 ContextPtr GetContext(phi::Place device) {
   if (device.GetType() == phi::AllocationType::CPU) return GetCpuContext();
 
-  K2_CHECK_EQ(device.GetType(), phi::AllocationType::GPU);
+  K2_CHECK_EQ(static_cast<int8_t>(device.GetType()), static_cast<int8_t>(phi::AllocationType::GPU));
   return GetCudaContext(device.GetDeviceId());
 }
 

@@ -209,6 +209,15 @@ if(K2_ENABLE_TESTS)
     top_sort_test.cu
     utils_test.cu
   )
+
+  if(K2_USE_PYTORCH)
+    set(cuda_test_srcs ${cuda_test_srcs} pytorch_context_test.cu)
+  endif()
+
+  if(K2_USE_PADDLE)
+    set(cuda_test_srcs ${cuda_test_srcs} paddle_context_test.cu)
+  endif()
+
   if(NOT K2_WITH_CUDA)
     transform(OUTPUT_VARIABLE cuda_test_srcs SRCS ${cuda_test_srcs})
   endif()

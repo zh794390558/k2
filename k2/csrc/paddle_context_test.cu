@@ -16,29 +16,35 @@
  * limitations under the License.
  */
 
-#include "c10/cuda/CUDAFunctions.h"
+#include "paddle/phi/backends/gpu/gpu_info.h"
 #include "gtest/gtest.h"
 #include "k2/csrc/test_utils.h"
 //
 #include "k2/csrc/array.h"
 #include "k2/csrc/device_guard.h"
-#include "k2/csrc/pytorch_context.h"
+#include "k2/csrc/paddle_context.h"
 
 namespace k2 {
 
 // Use a separate function because there is a lambda function inside K2_EVAL().
 static void TestImpl() {
-  K2_LOG(INFO) << "Number of devices: " << c10::cuda::device_count();
+  // K2_LOG(INFO) << "Number of devices: " << c10::cuda::device_count();
+   K2_LOG(INFO) << "Number of devices: " << phi::backends::gpu::GetGPUDeviceCount();
+
 
   // Set the default device to 1
-  c10::cuda::set_device(1);
-  EXPECT_EQ(c10::cuda::current_device(), 1);
+  // c10::cuda::set_device(1);
+  phi::backends::gpu::SetDeviceId(1);
+  // EXPECT_EQ(c10::cuda::current_device(), 1);
+  EXPECT_EQ(phi::backends::gpu::GetCurrentDeviceId(), 1);
+  
 
   ContextPtr c = GetCudaContext(0);
   EXPECT_EQ(c->GetDeviceId(), 0);
 
   // the default device should still be 1
-  EXPECT_EQ(c10::cuda::current_device(), 1);
+  // EXPECT_EQ(c10::cuda::current_device(), 1);
+  EXPECT_EQ(phi::backends::gpu::GetCurrentDeviceId(), 1);
 
   Array1<int32_t> a(c, "[1 2]");
   EXPECT_EQ(a.Context()->GetDeviceId(), 0);
@@ -68,12 +74,15 @@ static void TestImpl() {
   }
 }
 
-TEST(PyTorchContext, GetCudaContext) {
+TEST(PaddleContext, GetCudaContext) {
   // skip this test is CUDA is not available
-  if (!torch::cuda::is_available()) return;
+  // if (!torch::cuda::is_available()) return;
+  if(phi::backends::gpu::GetGPUDeviceCount() <= 0) return;
 
   // skip it if there are less than two CUDA GPUs.
-  if (c10::cuda::device_count() < 2) return;
+  // if (c10::cuda::device_count() < 2) return;
+
+  if( phi::backends::gpu::GetGPUDeviceCount() < 2) return;
 
   TestImpl();
 }

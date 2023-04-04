@@ -26,6 +26,7 @@
 // #include "torch/cuda.h"
 
 #include "paddle/phi/backends/gpu/gpu_info.h"
+#include "paddle/phi/api/include/context_pool.h"
 #endif
 
 #include "k2/csrc/context.h"
@@ -145,7 +146,7 @@ class PaddleCudaContext : public Context {
     // at::globalContext().lazyInitCUDA();
 
     // allocator_ = c10::cuda::CUDACachingAllocator::get();
-    allocator_ = phi::GetAllocator(phi::Place(phi::AllocationType::GPU, gpu_id));
+    allocator_ = paddle::GetAllocator(phi::Place(phi::AllocationType::GPU, gpu_id));
 
     // K2_CHECK(allocator_->raw_deleter() != nullptr);
 #else
@@ -162,9 +163,8 @@ class PaddleCudaContext : public Context {
     // return g_stream_override.OverrideStream(
         // c10::cuda::getCurrentCUDAStream(gpu_id_));
     
-    phi::CUDAStream* stream= paddle::GetCurrentCUDAStream(phi::GPUPlace(gpu_id_);
-    return g_stream_override.OverrideStream(reinterpret_cast<cudaStream_t>(stream))
-    );
+    phi::CUDAStream* stream= paddle::GetCurrentCUDAStream(phi::GPUPlace(gpu_id_));
+    return g_stream_override.OverrideStream(reinterpret_cast<cudaStream_t>(stream));
 #else
     return cudaStream_t{};
 #endif
