@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "k2/csrc/paddle_util.h"
-#include "paddle/phi/api/include/tensor_utils.h"
 
 namespace k2 {
 

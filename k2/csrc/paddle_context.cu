@@ -20,13 +20,16 @@
 #include <mutex>  // NOLINT
 
 #include "paddle/phi/core/allocator.h"
+#include "paddle/phi/common/data_type.h"
+
+#include "paddle/phi/api/include/context_pool.h"
+
 #ifdef K2_WITH_CUDA
 // #include "c10/cuda/CUDACachingAllocator.h"
 // #include "c10/cuda/CUDAFunctions.h"
 // #include "torch/cuda.h"
 
 #include "paddle/phi/backends/gpu/gpu_info.h"
-#include "paddle/phi/api/include/context_pool.h"
 #endif
 
 #include "k2/csrc/context.h"
