@@ -1,6 +1,5 @@
 # https://cmake.org/cmake/help/latest/module/FindPython3.html#module:FindPython3
 find_package(Python3 COMPONENTS Interpreter Development)
-# find_package(pybind11 CONFIG)
 
 if(Python3_FOUND)
     message(STATUS "Python3_FOUND = ${Python3_FOUND}")
@@ -15,13 +14,6 @@ endif()
 message(STATUS "PYTHON_LIBRARIES = ${PYTHON_LIBRARIES}")
 message(STATUS "PYTHON_INCLUDE_DIR = ${PYTHON_INCLUDE_DIR}")
 include_directories(${PYTHON_INCLUDE_DIR})
-
-# if(pybind11_FOUND)
-#     message(STATUS "pybind11_INCLUDES = ${pybind11_INCLUDE_DIRS}")
-#     message(STATUS "pybind11_LIBRARIES=${pybind11_LIBRARIES}")
-#     message(STATUS "pybind11_DEFINITIONS=${pybind11_DEFINITIONS}")
-# endif()
-
 
 # paddle libpaddle.so
 # paddle include and link option

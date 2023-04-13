@@ -4,14 +4,17 @@ include(transform)
 # please keep the list sorted
 set(k2_srcs
   k2.cu
-  torch.cu
   version.cu
 )
 
 if(K2_USE_PYTORCH)
   add_definitions(-DTORCH_API_INCLUDE_EXTENSION_H)
   add_subdirectory(torch)
-  set(k2_srcs ${k2_srcs} ${torch_srcs})
+  set(k2_srcs ${k2_srcs} torch.cu ${torch_srcs})
+elseif(K2_USE_PADDLE)
+  add_definitions(-DPADDLE_API_INCLUDE_EXTENSION_H)
+  add_subdirectory(paddle)
+  set(k2_srcs ${k2_srcs} paddle.cu ${paddle_srcs})
 else()
   message(FATAL_ERROR "Please select a framework.")
 endif()
@@ -33,12 +36,17 @@ pybind11_add_module(_k2 ${k2_srcs})
 target_link_libraries(_k2 PRIVATE context)
 target_link_libraries(_k2 PRIVATE fsa)
 
-if(APPLE)
-  # To fix the following error:
-  # ImportError: /xxx/lib/_k2.cpython-38-x86_64-linux-gnu.so: undefined symbol: THPDtypeType
-  target_link_libraries(_k2 PRIVATE ${TORCH_DIR}/lib/libtorch_python.dylib)
-elseif(UNIX)
-  target_link_libraries(_k2 PRIVATE ${TORCH_DIR}/lib/libtorch_python.so)
+if(K2_USE_PYTORCH)
+  if(APPLE)
+    # To fix the following error:
+    # ImportError: /xxx/lib/_k2.cpython-38-x86_64-linux-gnu.so: undefined symbol: THPDtypeType
+    target_link_libraries(_k2 PRIVATE ${TORCH_DIR}/lib/libtorch_python.dylib)
+  elseif(UNIX)
+    target_link_libraries(_k2 PRIVATE ${TORCH_DIR}/lib/libtorch_python.so)
+  endif()
+elseif(K2_USE_PADDLE)
+  message(WARNING "please check this for paddle build")
+  target_link_libraries(_k2 PRIVATE ${PADDLE_LINK_FLAGS})
 endif()
 
 target_include_directories(_k2 PRIVATE ${CMAKE_SOURCE_DIR})
@@ -50,13 +58,19 @@ if(NOT WIN32)
 endif()
 
 if(UNIX AND NOT APPLE)
-  # It causes errors on macOS
-  target_link_libraries(_k2 PRIVATE ${TORCH_DIR}/lib/libtorch_python.so)
+  if(K2_USE_PYTORCH)
+    # It causes errors on macOS
+    target_link_libraries(_k2 PRIVATE ${TORCH_DIR}/lib/libtorch_python.so)
+  endif()
+
   # CAUTION: It is PYTHON_LIBRARY on unix
   target_link_libraries(_k2 PRIVATE ${PYTHON_LIBRARY})
   message(STATUS "PYTHON_LIBRARY: ${PYTHON_LIBRARY}")
 elseif(WIN32)
-  target_link_libraries(_k2 PRIVATE ${TORCH_DIR}/lib/torch_python.lib)
+  if(K2_USE_PYTORCH)
+    target_link_libraries(_k2 PRIVATE ${TORCH_DIR}/lib/torch_python.lib)
+  endif()
+
   # CAUTION: It is PYTHON_LIBRARIES on Windows
   target_link_libraries(_k2 PRIVATE ${PYTHON_LIBRARIES})
   message(STATUS "PYTHON_LIBRARIES: ${PYTHON_LIBRARIES}")

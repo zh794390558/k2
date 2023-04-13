@@ -1,8 +1,12 @@
+# core lib
 add_subdirectory(csrc)
-if(K2_USE_PYTORCH)
+
+# pybind11
+if(K2_USE_PYTORCH OR K2_USE_PADDLE)
   add_subdirectory(python)
 endif()
 
+# inference
 if(K2_USE_PYTORCH)
   # We use K2_TORCH_VERSION instead of TORCH_VERSION
   # since TORCH_VERSION may contain something like "+cpu", "+cu113"
@@ -14,8 +18,4 @@ if(K2_USE_PYTORCH)
     message(WARNING "Please use at least torch 1.8.0 when CUDA \
     is enabled - skipping compiling k2/torch. Current torch version: ${TORCH_VERSION}")
   endif()
-endif()
-
-if(K2_USE_PADDLE)
-
 endif()

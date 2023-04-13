@@ -1,8 +1,8 @@
 /**
- * @brief python wrappers for k2.
+ * @brief python wrappers for Arc.
  *
  * @copyright
- * Copyright      2020  Mobvoi Inc.        (authors: Fangjun Kuang)
+ * Copyright      2022  PaddlePaddle.    (author: Hui Zhang)
  *
  * @copyright
  * See LICENSE for clarification regarding multiple authors
@@ -20,22 +20,11 @@
  * limitations under the License.
  */
 
-#include "k2/python/csrc/k2.h"
-#ifdef K2_USE_PYTORCH
-#include "k2/python/csrc/torch.h"
-#endif
-#ifdef K2_USE_PADDLE
-#include "k2/python/csrc/paddle.h"
-#endif
-#include "k2/python/csrc/version.h"
+#ifndef K2_PYTHON_CSRC_PADDLE_ARC_H_
+#define K2_PYTHON_CSRC_PADDLE_ARC_H_
 
-PYBIND11_MODULE(_k2, m) {
-  m.doc() = "pybind11 binding of k2";
-  PybindVersion(m);
-#ifdef K2_USE_PYTORCH
-  PybindTorch(m);
-#endif
-#ifdef K2_USE_PADDLE
-  PybindPaddle(m);
-#endif
-}
+#include "k2/python/csrc/paddle.h"
+
+void PybindArc(py::module &m);
+
+#endif  // K2_PYTHON_CSRC_PADDLE_ARC_H_
