@@ -25,7 +25,7 @@
 #if defined(K2_USE_PADDLE)
 
 #include "k2/python/csrc/paddle/arc.h"
-// #include "k2/python/csrc/paddle/fsa.h"
+#include "k2/python/csrc/paddle/fsa.h"
 // #include "k2/python/csrc/paddle/fsa_algo.h"
 // #include "k2/python/csrc/paddle/index_add.h"
 // #include "k2/python/csrc/paddle/index_select.h"
@@ -38,7 +38,7 @@
 
 void PybindPaddle(py::module &m) {
   PybindArc(m);
-  // PybindFsa(m);
+  PybindFsa(m);
   // PybindFsaAlgo(m);
   // PybindIndexAdd(m);
   // PybindIndexSelect(m);

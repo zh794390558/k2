@@ -1,7 +1,7 @@
 # please keep the list sorted
 set(paddle_srcs
   arc.cu
-  # fsa.cu
+  fsa.cu
   # fsa_algo.cu
   # index_add.cu
   # index_select.cu
