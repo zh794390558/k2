@@ -33,23 +33,23 @@
 
 namespace k2 {
 
-/* Convert k2::DeviceType to phi::AllocationType.
+/* Convert k2::DeviceType to paddle::AllocationType.
    Abort on failure.
 
    @param [in] type  We support only kCpu and kCuda at present.
 
-   @return phi::AllocationType::GPU or phi::AllocationType::CPU.
+   @return paddle::AllocationType::GPU or paddle::AllocationType::CPU.
  */
-phi::AllocationType ToPaddleDeviceType(DeviceType type);
+paddle::AllocationType ToPaddleDeviceType(DeviceType type);
 
-/* Convert phi::AllocationType to k2::DeviceType.
+/* Convert paddle::AllocationType to k2::DeviceType.
    Abort on failure.
 
-   @param [in] type  We support only phi::AllocationType::GPU and phi::AllocationType::CPU currently.
+   @param [in] type  We support only paddle::AllocationType::GPU and paddle::AllocationType::CPU currently.
 
    @return  kCpu or kCuda.
  */
-DeviceType FromTorchDeviceType(const phi::AllocationType &type);
+DeviceType FromTorchDeviceType(const paddle::AllocationType &type);
 
 // Some versions of PyTorch do not have `c10::CppTypeToScalarType`,
 // so we implement our own here.
@@ -59,19 +59,19 @@ struct ToScalarType;
 #define TO_SCALAR_TYPE(cpp_type, scalar_type) \
   template <>                                 \
   struct ToScalarType<cpp_type>               \
-      : std::integral_constant<phi::DataType, scalar_type> {};
+      : std::integral_constant<paddle::DataType, scalar_type> {};
 
 // TODO(fangjun): add other types if needed
-TO_SCALAR_TYPE(float, phi::DataType::FLOAT32);
-TO_SCALAR_TYPE(double, phi::DataType::FLOAT64);
-TO_SCALAR_TYPE(int32_t, phi::DataType::INT32);
-TO_SCALAR_TYPE(int64_t, phi::DataType::INT64);
-TO_SCALAR_TYPE(bool, phi::DataType::BOOL);
+TO_SCALAR_TYPE(float, paddle::DataType::FLOAT32);
+TO_SCALAR_TYPE(double, paddle::DataType::FLOAT64);
+TO_SCALAR_TYPE(int32_t, paddle::DataType::INT32);
+TO_SCALAR_TYPE(int64_t, paddle::DataType::INT64);
+TO_SCALAR_TYPE(bool, paddle::DataType::BOOL);
 
 #undef TO_SCALAR_TYPE
 
-Dtype ScalarTypeToDtype(phi::DataType scalar_type);
-phi::DataType ScalarTypeFromDtype(Dtype dtype);
+Dtype ScalarTypeToDtype(paddle::DataType scalar_type);
+paddle::DataType ScalarTypeFromDtype(Dtype dtype);
 
 /* Convert an Array1<T> to paddle::Tensor.
 
@@ -87,7 +87,7 @@ template <typename T>
 paddle::Tensor ToPaddle(Array1<T> &array) {
   auto device_type = ToPaddleDeviceType(array.Context()->GetDeviceType());
   int32_t device_id = array.Context()->GetDeviceId();
-  auto device = phi::Place(device_type, device_id);
+  auto device = paddle::Place(device_type, device_id);
   auto scalar_type = ToScalarType<T>::value;
   // We will call torch::from_blob below. However, if we
   // call it with an empty Array1, we'll get error:
@@ -102,7 +102,7 @@ paddle::Tensor ToPaddle(Array1<T> &array) {
   return paddle::from_blob(array.Data(),
                             {array.Dim()},
                             scalar_type,
-                            phi::DataLayout::NCHW,
+                            paddle::DataLayout::NCHW,
                             device,
                             [saved_region = array.GetRegion()](void *) {});
 }
@@ -193,7 +193,7 @@ template <typename T>
 paddle::Tensor ToPaddle(Array2<T> &array) {
   auto device_type = ToPaddleDeviceType(array.Context()->GetDeviceType());
   int32_t device_id = array.Context()->GetDeviceId();
-  auto device = phi::Place(device_type, device_id);
+  auto device = paddle::Place(device_type, device_id);
   auto scalar_type = ToScalarType<T>::value;
   // auto options = torch::device(device).dtype(scalar_type);
 
@@ -211,7 +211,7 @@ paddle::Tensor ToPaddle(Array2<T> &array) {
 
   auto tensor = paddle::from_blob(
     array.Data(), {array.Dim0(), array.Dim1()}, scalar_type, 
-    phi::DataLayout::NCHW, device, [saved_region = array.GetRegion()](void *) {});
+    paddle::DataLayout::NCHW, device, [saved_region = array.GetRegion()](void *) {});
 
   return tensor;
 }

@@ -24,41 +24,41 @@
 
 namespace k2 {
 
-phi::AllocationType ToPaddleDeviceType(DeviceType type) {
+paddle::AllocationType ToPaddleDeviceType(DeviceType type) {
   switch (type) {
     case kCuda:
-      return phi::AllocationType::GPU;
+      return paddle::AllocationType::GPU;
     case kCpu:
-      return phi::AllocationType::CPU;
+      return paddle::AllocationType::CPU;
     case kUnk:  // fall-through
     default:
       K2_LOG(FATAL) << "kUnk is not supported!";
-      return phi::AllocationType::CPU;  // unreachable code
+      return paddle::AllocationType::CPU;  // unreachable code
   }
 }
 
-DeviceType FromTorchDeviceType(const phi::AllocationType &type) {
+DeviceType FromTorchDeviceType(const paddle::AllocationType &type) {
   switch (type) {
-    case  phi::AllocationType::GPU:
+    case  paddle::AllocationType::GPU:
       return kCuda;
-    case  phi::AllocationType::CPU:
+    case  paddle::AllocationType::CPU:
       return kCpu;
     default:
       K2_LOG(FATAL) << "Unsupported device type: " << phi::AllocationTypeStr(type)
-                    << ". Only phi::AllocationType::GPU and phi::AllocationType::CPU are supported";
+                    << ". Only paddle::AllocationType::GPU and paddle::AllocationType::CPU are supported";
       return kUnk;  // unreachable code
   }
 }
 
-Dtype ScalarTypeToDtype(phi::DataType scalar_type) {
+Dtype ScalarTypeToDtype(paddle::DataType scalar_type) {
   switch (scalar_type) {
-    case phi::DataType::FLOAT32:
+    case paddle::DataType::FLOAT32:
       return kFloatDtype;
-    case phi::DataType::FLOAT64:
+    case paddle::DataType::FLOAT64:
       return kDoubleDtype;
-    case phi::DataType::INT32:
+    case paddle::DataType::INT32:
       return kInt32Dtype;
-    case phi::DataType::INT64:
+    case paddle::DataType::INT64:
       return kInt64Dtype;
     default:
       // TODO(fangjun): add other types when needed
@@ -67,20 +67,20 @@ Dtype ScalarTypeToDtype(phi::DataType scalar_type) {
   }
 }
 
-phi::DataType ScalarTypeFromDtype(Dtype dtype) {
+paddle::DataType ScalarTypeFromDtype(Dtype dtype) {
   switch (dtype) {
     case kFloatDtype:
-      return phi::DataType::FLOAT32;
+      return paddle::DataType::FLOAT32;
     case kDoubleDtype:
-      return phi::DataType::FLOAT64;
+      return paddle::DataType::FLOAT64;
     case kInt32Dtype:
-      return phi::DataType::INT32;
+      return paddle::DataType::INT32;
     case kInt64Dtype:
-      return phi::DataType::INT64;
+      return paddle::DataType::INT64;
     default:
       // TODO(fangjun): add other types when needed
       K2_LOG(FATAL) << "Unsupported dtype: " << TraitsOf(dtype).Name();
-      return phi::DataType::UNDEFINED;  // unreachable code
+      return paddle::DataType::UNDEFINED;  // unreachable code
   }
 }
 
@@ -88,7 +88,7 @@ template <>
 paddle::Tensor ToPaddle(Array1<Arc> &array) {
   auto device_type = ToPaddleDeviceType(array.Context()->GetDeviceType());
   int32_t device_id = array.Context()->GetDeviceId();
-  auto device = phi::Place(device_type, device_id);
+  auto device = paddle::Place(device_type, device_id);
   auto scalar_type = ToScalarType<int32_t>::value;
   // an Arc has 4 members
   K2_STATIC_ASSERT(sizeof(Arc) == 4 * sizeof(int32_t));
@@ -104,7 +104,7 @@ paddle::Tensor ToPaddle(Array1<Arc> &array) {
   //     [saved_region = array.GetRegion()](void *) {}, options);
 
   return paddle::from_blob(
-    array.Data(), sizes, scalar_type, phi::DataLayout::NCHW, device,
+    array.Data(), sizes, scalar_type, paddle::DataLayout::NCHW, device,
     [saved_region = array.GetRegion()](void*){});
 }
 
@@ -145,7 +145,7 @@ Tensor FromPaddle(paddle::Tensor tensor, TensorTag) {
 paddle::Tensor ToPaddle(Tensor &tensor) {
   auto device_type = ToPaddleDeviceType(tensor.Context()->GetDeviceType());
   int32_t device_id = tensor.Context()->GetDeviceId();
-  auto device = phi::Place(device_type, device_id);
+  auto device = paddle::Place(device_type, device_id);
   auto scalar_type = ScalarTypeFromDtype(tensor.GetDtype());
   // auto options = torch::device(device).dtype(scalar_type);
 
@@ -164,13 +164,13 @@ paddle::Tensor ToPaddle(Tensor &tensor) {
 
   return paddle::from_blob(
      tensor.Data(), sizes, scalar_type, 
-     phi::DataLayout::NCHW, device, [saved_region = tensor.GetRegion()](void*){});
+     paddle::DataLayout::NCHW, device, [saved_region = tensor.GetRegion()](void*){});
 }
 
-ContextPtr GetContext(phi::Place device) {
-  if (device.GetType() == phi::AllocationType::CPU) return GetCpuContext();
+ContextPtr GetContext(paddle::Place device) {
+  if (device.GetType() == paddle::AllocationType::CPU) return GetCpuContext();
 
-  K2_CHECK_EQ(static_cast<int8_t>(device.GetType()), static_cast<int8_t>(phi::AllocationType::GPU));
+  K2_CHECK_EQ(static_cast<int8_t>(device.GetType()), static_cast<int8_t>(paddle::AllocationType::GPU));
   return GetCudaContext(device.GetDeviceId());
 }
 

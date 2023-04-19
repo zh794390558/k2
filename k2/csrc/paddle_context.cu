@@ -62,7 +62,7 @@ class PaddleCpuContext : public Context {
  public:
   PaddleCpuContext() {
     // allocator_ = torch::GetAllocator(torch::kCPU);
-    allocator_ = paddle::GetAllocator(phi::Place(phi::AllocationType::CPU));
+    allocator_ = paddle::GetAllocator(paddle::Place(paddle::AllocationType::CPU));
     // K2_CHECK(allocator_->raw_deleter() != nullptr);
   }
 
@@ -94,7 +94,7 @@ class PaddleCpuContext : public Context {
       delete reinterpret_cast<ManagedTensor *>(deleter_context);
     } else {
       // allocator_->raw_deallocate(data);
-      auto allocation = new phi::Allocation(data, 0/*size_t size*/, deleter_, phi::CPUPlace());
+      auto allocation = new phi::Allocation(data, 0/*size_t size*/, deleter_, paddle::CPUPlace());
       allocation->~Allocation();
     }
   }
@@ -149,7 +149,7 @@ class PaddleCudaContext : public Context {
     // at::globalContext().lazyInitCUDA();
 
     // allocator_ = c10::cuda::CUDACachingAllocator::get();
-    allocator_ = paddle::GetAllocator(phi::Place(phi::AllocationType::GPU, gpu_id));
+    allocator_ = paddle::GetAllocator(paddle::Place(paddle::AllocationType::GPU, gpu_id));
 
     // K2_CHECK(allocator_->raw_deleter() != nullptr);
 #else
@@ -166,7 +166,7 @@ class PaddleCudaContext : public Context {
     // return g_stream_override.OverrideStream(
         // c10::cuda::getCurrentCUDAStream(gpu_id_));
     
-    phi::CUDAStream* stream= paddle::GetCurrentCUDAStream(phi::GPUPlace(gpu_id_));
+    phi::CUDAStream* stream= paddle::GetCurrentCUDAStream(paddle::GPUPlace(gpu_id_));
     return g_stream_override.OverrideStream(reinterpret_cast<cudaStream_t>(stream));
 #else
     return cudaStream_t{};
@@ -209,7 +209,7 @@ class PaddleCudaContext : public Context {
         K2_CHECK_CUDA_ERROR(cudaFree(data));
       } else {
         // allocator_->raw_deallocate(data);
-        auto allocation = new phi::Allocation(data, 0/*size_t size*/, deleter_, phi::GPUPlace(gpu_id_));
+        auto allocation = new phi::Allocation(data, 0/*size_t size*/, deleter_, paddle::GPUPlace(gpu_id_));
         allocation->~Allocation();
       }
     }
@@ -277,9 +277,9 @@ ContextPtr GetCudaContext(int32_t gpu_id /*= -1*/) {
 
 RegionPtr NewRegion(paddle::Tensor tensor) {
   auto ans = std::make_shared<Region>();
-  if (tensor.place().GetType() == phi::AllocationType::CPU) {
+  if (tensor.place().GetType() == paddle::AllocationType::CPU) {
     ans->context = GetCpuContext();
-  } else if (tensor.place().GetType() == phi::AllocationType::GPU) {
+  } else if (tensor.place().GetType() == paddle::AllocationType::GPU) {
     ans->context = GetCudaContext(tensor.place().GetDeviceId());
   } else {
     K2_LOG(FATAL) << "Unsupported device: " << tensor.place()
